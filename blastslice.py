@@ -1,9 +1,11 @@
+import os  # os 모듈 추가
 import requests
 import xml.etree.ElementTree as ET
 import cv2
 import random
 import numpy as np
 from io import BytesIO
+
 
 class BlastSlice:
     def __init__(self, image_base_url, annotation_url, window_size=256, training_range=(0, 159)):
