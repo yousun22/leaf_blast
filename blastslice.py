@@ -1,5 +1,4 @@
 import requests
-import os
 import xml.etree.ElementTree as ET
 import cv2
 import random
@@ -7,8 +6,8 @@ import numpy as np
 from io import BytesIO
 
 class BlastSlice:
-    def __init__(self, image_folder, annotation_url, window_size=256, training_range=(0, 159)):
-        self.image_folder = image_folder
+    def __init__(self, image_base_url, annotation_url, window_size=256, training_range=(0, 159)):
+        self.image_base_url = image_base_url  # GitHub Raw 이미지 URL
         self.annotation_file = "all_annotations.xml"  # XML 파일명 고정
         self.window_size = window_size
         self.training_range = training_range
@@ -44,7 +43,7 @@ class BlastSlice:
         return annotations
 
     def slice(self, window_size=None):
-        """ 바운딩 박스 기준으로 랜덤하게 이미지를 슬라이싱하고 반환 """
+        """ GitHub에서 직접 이미지를 불러와 바운딩 박스를 기준으로 슬라이싱하고 반환 """
         if window_size:
             self.window_size = window_size
 
@@ -52,14 +51,24 @@ class BlastSlice:
         extracted_annotations = {}  # {파일명: 어노테이션 내용} 형태로 반환
 
         for image_name, boxes in self.annotations.items():
-            image_number = int(os.path.splitext(image_name)[0])
+            image_number = int(image_name.split(".")[0])
             if image_number > self.training_range[1]:
                 continue  # 테스트 이미지는 건너뜀
 
-            image_path = os.path.join(self.image_folder, image_name)
-            image = cv2.imread(image_path)
+            # GitHub Raw URL 생성
+            image_url = f"{self.image_base_url}/{image_name}"
+
+            # GitHub에서 직접 이미지 요청
+            response = requests.get(image_url)
+            if response.status_code != 200:
+                print(f"❌ Error: {image_name} could not be loaded.")
+                continue
+
+            # OpenCV로 이미지 디코딩
+            img_arr = np.asarray(bytearray(response.content), dtype=np.uint8)
+            image = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
             if image is None:
-                print(f"Image {image_name} could not be loaded.")
+                print(f"❌ Error: Failed to decode {image_name}")
                 continue
 
             img_height, img_width = image.shape[:2]
