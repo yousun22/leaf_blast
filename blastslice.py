@@ -7,8 +7,8 @@ import numpy as np
 from io import BytesIO
 
 class BlastSlice:
-    def __init__(self, image_folder, annotation_url, window_size=256, training_range=(0, 159)):
-        self.image_folder = image_folder
+    def __init__(self, image_base_url, annotation_url, window_size=256, training_range=(0, 159)):
+        self.image_base_url = image_base_url  # GitHub 이미지 기본 URL
         self.annotation_file = "all_annotations.xml"  # XML 파일명 고정
         self.window_size = window_size
         self.training_range = training_range
@@ -43,6 +43,19 @@ class BlastSlice:
             annotations[image_name] = boxes
         return annotations
 
+    def download_image(self, image_name):
+        """ GitHub에서 이미지를 다운로드하여 OpenCV 형식으로 변환 """
+        img_url = f"{self.image_base_url}/{image_name}"
+        response = requests.get(img_url, stream=True)
+
+        if response.status_code == 200:
+            img_array = np.asarray(bytearray(response.content), dtype=np.uint8)
+            image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            return image
+        else:
+            print(f"❌ Failed to download {image_name}")
+            return None
+
     def slice(self, window_size=None):
         """ 바운딩 박스 기준으로 랜덤하게 이미지를 슬라이싱하고 반환 """
         if window_size:
@@ -56,10 +69,8 @@ class BlastSlice:
             if image_number > self.training_range[1]:
                 continue  # 테스트 이미지는 건너뜀
 
-            image_path = os.path.join(self.image_folder, image_name)
-            image = cv2.imread(image_path)
+            image = self.download_image(image_name)  # GitHub에서 직접 다운로드
             if image is None:
-                print(f"Image {image_name} could not be loaded.")
                 continue
 
             img_height, img_width = image.shape[:2]
@@ -70,7 +81,7 @@ class BlastSlice:
                 box_height = ymax - ymin
 
                 if box_width > self.window_size or box_height > self.window_size:
-                    print(f"Box too large for {image_name}, skipping.")
+                    print(f"⚠ Box too large for {image_name}, skipping.")
                     continue
 
                 x_random_offset = random.randint(-int((self.window_size - box_width) / 2), int((self.window_size - box_width) / 2))
