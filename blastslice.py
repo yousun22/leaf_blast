@@ -1,5 +1,5 @@
+import os  # os 모듈 추가
 import requests
-import os
 import xml.etree.ElementTree as ET
 import cv2
 import random
@@ -8,7 +8,7 @@ from io import BytesIO
 
 class BlastSlice:
     def __init__(self, image_base_url, annotation_url, window_size=256, training_range=(0, 159)):
-        self.image_base_url = image_base_url  # GitHub 이미지 기본 URL
+        self.image_base_url = image_base_url  # GitHub Raw 이미지 URL
         self.annotation_file = "all_annotations.xml"  # XML 파일명 고정
         self.window_size = window_size
         self.training_range = training_range
@@ -43,21 +43,8 @@ class BlastSlice:
             annotations[image_name] = boxes
         return annotations
 
-    def download_image(self, image_name):
-        """ GitHub에서 이미지를 다운로드하여 OpenCV 형식으로 변환 """
-        img_url = f"{self.image_base_url}/{image_name}"
-        response = requests.get(img_url, stream=True)
-
-        if response.status_code == 200:
-            img_array = np.asarray(bytearray(response.content), dtype=np.uint8)
-            image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-            return image
-        else:
-            print(f"❌ Failed to download {image_name}")
-            return None
-
     def slice(self, window_size=None):
-        """ 바운딩 박스 기준으로 랜덤하게 이미지를 슬라이싱하고 반환 """
+        """ GitHub에서 직접 이미지를 불러와 바운딩 박스를 기준으로 슬라이싱하고 반환 """
         if window_size:
             self.window_size = window_size
 
@@ -65,12 +52,24 @@ class BlastSlice:
         extracted_annotations = {}  # {파일명: 어노테이션 내용} 형태로 반환
 
         for image_name, boxes in self.annotations.items():
-            image_number = int(os.path.splitext(image_name)[0])
+            image_number = int(image_name.split(".")[0])
             if image_number > self.training_range[1]:
                 continue  # 테스트 이미지는 건너뜀
 
-            image = self.download_image(image_name)  # GitHub에서 직접 다운로드
+            # GitHub Raw URL 생성
+            image_url = f"{self.image_base_url}/{image_name}"
+
+            # GitHub에서 직접 이미지 요청
+            response = requests.get(image_url)
+            if response.status_code != 200:
+                print(f"❌ Error: {image_name} could not be loaded.")
+                continue
+
+            # OpenCV로 이미지 디코딩
+            img_arr = np.asarray(bytearray(response.content), dtype=np.uint8)
+            image = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
             if image is None:
+                print(f"❌ Error: Failed to decode {image_name}")
                 continue
 
             img_height, img_width = image.shape[:2]
@@ -81,7 +80,7 @@ class BlastSlice:
                 box_height = ymax - ymin
 
                 if box_width > self.window_size or box_height > self.window_size:
-                    print(f"⚠ Box too large for {image_name}, skipping.")
+                    print(f"Box too large for {image_name}, skipping.")
                     continue
 
                 x_random_offset = random.randint(-int((self.window_size - box_width) / 2), int((self.window_size - box_width) / 2))
