@@ -7,9 +7,9 @@ import numpy as np
 from io import BytesIO
 
 class BlastSlice:
-    def __init__(self, image_base_url, annotation_url, window_size=256, training_range=(0, 159)):
+    def __init__(self, image_base_url, annotation_url, window_size=256, training_range=(0, 159), annotation_file="all_annotations.xml"):
         self.image_base_url = image_base_url  # GitHub Raw 이미지 URL
-        self.annotation_file = "all_annotations.xml"  # XML 파일명 고정
+        self.annotation_file = annotation_file  # XML 파일명 (변경 가능)
         self.window_size = window_size
         self.training_range = training_range
 
@@ -83,6 +83,7 @@ class BlastSlice:
                     print(f"Box too large for {image_name}, skipping.")
                     continue
 
+                # 무작위 오프셋을 적용하여 슬라이싱
                 x_random_offset = random.randint(-int((self.window_size - box_width) / 2), int((self.window_size - box_width) / 2))
                 y_random_offset = random.randint(-int((self.window_size - box_height) / 2), int((self.window_size - box_height) / 2))
 
